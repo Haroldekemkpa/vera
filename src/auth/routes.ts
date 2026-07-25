@@ -9,9 +9,9 @@ import {
 
 export const authRouter = Router();
 
-authRouter.get("/google", (_req, res, next) => {
+authRouter.get("/google", async (_req, res, next) => {
   try {
-    const state = createOAuthState();
+    const state = await createOAuthState();
     res.redirect(getGoogleAuthUrl(state));
   } catch (error) {
     next(error);
@@ -35,7 +35,7 @@ authRouter.get("/google/callback", async (req, res, next) => {
       });
     }
 
-    if (typeof state !== "string" || !consumeOAuthState(state)) {
+    if (typeof state !== "string" || !(await consumeOAuthState(state))) {
       return res.status(400).json({
         message: "Invalid or expired OAuth state",
       });

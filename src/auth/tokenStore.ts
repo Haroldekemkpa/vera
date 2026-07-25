@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import type { Credentials } from "google-auth-library";
+import { prisma } from "../db/prisma.js";
 
 type StoredOAuthToken = {
   provider: "google";
@@ -7,20 +8,36 @@ type StoredOAuthToken = {
   connectedAt: Date;
 };
 
-const pendingStates = new Set<string>();
 const connectedTokens = new Map<string, StoredOAuthToken>();
 
-export function createOAuthState() {
+export async function createOAuthState() {
   const state = crypto.randomBytes(32).toString("hex");
-  pendingStates.add(state);
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+  await prisma.oAuthState.create({
+    data: {
+      state,
+      expiresAt,
+    },
+  });
 
   return state;
 }
 
-export function consumeOAuthState(state: string) {
-  const exists = pendingStates.delete(state);
+export async function consumeOAuthState(state: string) {
+  const record = await prisma.oAuthState.findUnique({
+    where: { state },
+  });
 
-  return exists;
+  if (!record || record.expiresAt < new Date()) {
+    return false;
+  }
+
+  await prisma.oAuthState.delete({
+    where: { state },
+  });
+
+  return true;
 }
 
 export function saveGoogleTokens(tokens: Credentials) {
