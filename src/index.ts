@@ -1,12 +1,36 @@
 // src/index.ts
 import express from "express";
 import dotenv from "dotenv";
-// import { getGoogleAuthUrl, exchangeGoogleCode } from "./auth/google.js";
+import { authRouter } from "./auth/routes.js";
 
 dotenv.config();
-const PORT = process.env.PORT;
+const PORT = Number(process.env.PORT ?? 3000);
 const app = express();
 
-app.listen(3000, () => {
+app.use(express.json());
+
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok" });
+});
+
+app.use("/auth", authRouter);
+
+app.use(
+  (
+    error: unknown,
+    _req: express.Request,
+    res: express.Response,
+    _next: express.NextFunction,
+  ) => {
+    const message = error instanceof Error ? error.message : "Unknown error";
+
+    res.status(500).json({
+      message: "Internal server error",
+      error: message,
+    });
+  },
+);
+
+app.listen(PORT, () => {
   console.log(`VERA running on http://localhost:${PORT}`);
 });
