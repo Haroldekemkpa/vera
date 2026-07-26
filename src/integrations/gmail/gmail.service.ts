@@ -37,8 +37,8 @@ type GmailMessageApiResponse = {
   };
 };
 
-function getGmail(connectionId: string) {
-  const connection = getStoredGoogleConnection(connectionId);
+async function getGmail(connectionId: string) {
+  const connection = await getStoredGoogleConnection(connectionId);
 
   if (!connection) {
     throw new Error("Google connection not found");
@@ -66,7 +66,7 @@ export async function sendEmail(
   input: SendEmailInput,
 ): Promise<SendEmailResult> {
   const validatedInput = sendEmailInputSchema.parse(input);
-  const gmail = getGmail(connectionId);
+  const gmail = await getGmail(connectionId);
   const raw = mapSendEmailInputToRawMessage(validatedInput);
 
   const response = await gmail.users.messages.send({
@@ -86,7 +86,7 @@ export async function listMessages(
   input: ListMessagesInput = {},
 ): Promise<ListMessagesResult> {
   const validatedInput = listMessagesInputSchema.parse(input);
-  const gmail = getGmail(connectionId);
+  const gmail = await getGmail(connectionId);
   const params: Record<string, unknown> = {
     userId: "me",
     maxResults: validatedInput.maxResults,
@@ -120,7 +120,7 @@ export async function getMessage(
   connectionId: string,
   messageId: string,
 ): Promise<GmailMessage> {
-  const gmail = getGmail(connectionId);
+  const gmail = await getGmail(connectionId);
   const response = await gmail.users.messages.get({
     userId: "me",
     id: messageId,
@@ -135,7 +135,7 @@ export async function createDraft(
   input: CreateDraftInput,
 ): Promise<CreateDraftResult> {
   const validatedInput = createDraftInputSchema.parse(input);
-  const gmail = getGmail(connectionId);
+  const gmail = await getGmail(connectionId);
   const raw = mapSendEmailInputToRawMessage(validatedInput);
 
   const response = await gmail.users.drafts.create({
@@ -163,7 +163,7 @@ export async function sendDraft(
   input: SendDraftInput,
 ): Promise<SendEmailResult> {
   const validatedInput = sendDraftInputSchema.parse(input);
-  const gmail = getGmail(connectionId);
+  const gmail = await getGmail(connectionId);
 
   const response = await gmail.users.drafts.send({
     userId: "me",
@@ -209,7 +209,7 @@ export async function replyToMessage(
     ? original.subject
     : `Re: ${original.subject ?? ""}`.trim();
 
-  const gmail = getGmail(connectionId);
+  const gmail = await getGmail(connectionId);
   const raw = mapSendEmailInputToRawMessage(
     {
       to: [...recipients],
@@ -247,7 +247,7 @@ export async function getAttachment(
   messageId: string,
   attachmentId: string,
 ): Promise<GmailAttachment> {
-  const gmail = getGmail(connectionId);
+  const gmail = await getGmail(connectionId);
   const response = await gmail.users.messages.attachments.get({
     userId: "me",
     messageId,
