@@ -1,8 +1,7 @@
 // src/index.ts
 import express from "express";
 import dotenv from "dotenv";
-import { authRouter } from "./auth/routes.js";
-import { gmailRouter } from "./integrations/gmail/gmail.routes.js";
+import { apiRouter } from "./routes.js";
 
 dotenv.config();
 const PORT = Number(process.env.PORT ?? 3000);
@@ -14,8 +13,7 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
-app.use("/auth", authRouter);
-app.use("/gmail", gmailRouter);
+app.use("/api", apiRouter);
 
 app.use(
   (
