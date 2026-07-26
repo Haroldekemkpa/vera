@@ -52,3 +52,25 @@ export async function exchangeGoogleCode(code: string): Promise<Credentials> {
 
   return tokens;
 }
+
+export async function getGoogleUserInfo(tokens: Credentials) {
+  const oauthClient = createGoogleOAuthClient();
+  oauthClient.setCredentials(tokens);
+
+  const oauth2 = google.oauth2({
+    version: "v2",
+    auth: oauthClient,
+  });
+  const response = await oauth2.userinfo.get();
+
+  if (!response.data.email) {
+    throw new Error("Google account did not return an email address");
+  }
+
+  return {
+    id: response.data.id ?? response.data.email,
+    email: response.data.email,
+    name: response.data.name ?? null,
+    avatarUrl: response.data.picture ?? null,
+  };
+}

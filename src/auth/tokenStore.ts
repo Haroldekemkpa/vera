@@ -1,14 +1,14 @@
 import crypto from "node:crypto";
 import type { Credentials } from "google-auth-library";
 import { prisma } from "../db/prisma.js";
+import { decryptToken, encryptToken } from "./tokenCrypto.js";
 
-type StoredOAuthToken = {
-  provider: "google";
-  tokens: Credentials;
-  connectedAt: Date;
+type GoogleUserInfo = {
+  id: string;
+  email: string;
+  name: string | null;
+  avatarUrl: string | null;
 };
-
-const connectedTokens = new Map<string, StoredOAuthToken>();
 
 export async function createOAuthState() {
   const state = crypto.randomBytes(32).toString("hex");
@@ -40,36 +40,125 @@ export async function consumeOAuthState(state: string) {
   return true;
 }
 
-export function saveGoogleTokens(tokens: Credentials) {
-  const connectionId = crypto.randomUUID();
-
-  connectedTokens.set(connectionId, {
-    provider: "google",
-    tokens,
-    connectedAt: new Date(),
-  });
-
-  return connectionId;
+function getTokenExpiryDate(tokens: Credentials) {
+  return tokens.expiry_date ? new Date(tokens.expiry_date) : null;
 }
 
-export function getStoredGoogleConnection(connectionId: string) {
-  const connection = connectedTokens.get(connectionId);
+function getTokenScopes(tokens: Credentials) {
+  return tokens.scope?.split(" ").filter(Boolean) ?? [];
+}
 
-  if (connection?.provider !== "google") {
+export async function saveGoogleTokens(
+  tokens: Credentials,
+  googleUser: GoogleUserInfo,
+) {
+  const user = await prisma.user.upsert({
+    where: { email: googleUser.email },
+    create: {
+      email: googleUser.email,
+      name: googleUser.name,
+      avatarUrl: googleUser.avatarUrl,
+    },
+    update: {
+      name: googleUser.name,
+      avatarUrl: googleUser.avatarUrl,
+    },
+  });
+
+  const existingAccount = await prisma.oAuthAccount.findUnique({
+    where: {
+      provider_providerAccountId: {
+        provider: "google",
+        providerAccountId: googleUser.id,
+      },
+    },
+  });
+
+  const tokenData = {
+    provider: "google",
+    providerAccountId: googleUser.id,
+    accessToken: tokens.access_token ? encryptToken(tokens.access_token) : null,
+    tokenType: tokens.token_type ?? null,
+    scopes: getTokenScopes(tokens),
+    expiresAt: getTokenExpiryDate(tokens),
+    userId: user.id,
+  };
+
+  const account = await prisma.oAuthAccount.upsert({
+    where: {
+      provider_providerAccountId: {
+        provider: "google",
+        providerAccountId: googleUser.id,
+      },
+    },
+    create: {
+      ...tokenData,
+      refreshToken: tokens.refresh_token ? encryptToken(tokens.refresh_token) : null,
+    },
+    update: {
+      ...tokenData,
+      refreshToken: tokens.refresh_token
+        ? encryptToken(tokens.refresh_token)
+        : (existingAccount?.refreshToken ?? null),
+    },
+  });
+
+  return account.id;
+}
+
+export async function getStoredGoogleConnection(connectionId: string) {
+  const account = await prisma.oAuthAccount.findFirst({
+    where: {
+      id: connectionId,
+      provider: "google",
+    },
+  });
+
+  if (!account) {
     return null;
   }
 
-  return connection;
+  const tokens: Credentials = {
+    access_token: account.accessToken ? decryptToken(account.accessToken) : null,
+    refresh_token: account.refreshToken ? decryptToken(account.refreshToken) : null,
+    token_type: account.tokenType,
+    scope: account.scopes.join(" "),
+    expiry_date: account.expiresAt?.getTime() ?? null,
+  };
+
+  return {
+    provider: "google" as const,
+    connectedAt: account.createdAt,
+    tokens,
+  };
 }
 
-export function listGoogleConnections() {
-  return [...connectedTokens.entries()].map(([id, connection]) => ({
-    id,
-    provider: connection.provider,
-    connectedAt: connection.connectedAt,
-    hasAccessToken: Boolean(connection.tokens.access_token),
-    hasRefreshToken: Boolean(connection.tokens.refresh_token),
-    expiryDate: connection.tokens.expiry_date ?? null,
-    scopes: connection.tokens.scope?.split(" ") ?? [],
+export async function listGoogleConnections() {
+  const accounts = await prisma.oAuthAccount.findMany({
+    where: { provider: "google" },
+    orderBy: { createdAt: "desc" },
+    include: {
+      user: {
+        select: {
+          email: true,
+          name: true,
+        },
+      },
+    },
+  });
+
+  return accounts.map((account) => ({
+    id: account.id,
+    provider: account.provider,
+    providerAccountId: account.providerAccountId,
+    userId: account.userId,
+    email: account.user.email,
+    name: account.user.name,
+    connectedAt: account.createdAt,
+    updatedAt: account.updatedAt,
+    hasAccessToken: Boolean(account.accessToken),
+    hasRefreshToken: Boolean(account.refreshToken),
+    expiryDate: account.expiresAt?.getTime() ?? null,
+    scopes: account.scopes,
   }));
 }

@@ -1,5 +1,9 @@
 import { Router } from "express";
-import { exchangeGoogleCode, getGoogleAuthUrl } from "./google.js";
+import {
+  exchangeGoogleCode,
+  getGoogleAuthUrl,
+  getGoogleUserInfo,
+} from "./google.js";
 import {
   consumeOAuthState,
   createOAuthState,
@@ -42,11 +46,13 @@ authRouter.get("/google/callback", async (req, res, next) => {
     }
 
     const tokens = await exchangeGoogleCode(code);
-    const connectionId = saveGoogleTokens(tokens);
+    const googleUser = await getGoogleUserInfo(tokens);
+    const connectionId = await saveGoogleTokens(tokens, googleUser);
 
     return res.json({
       message: "Google account connected",
       connectionId,
+      email: googleUser.email,
       hasAccessToken: Boolean(tokens.access_token),
       hasRefreshToken: Boolean(tokens.refresh_token),
       expiryDate: tokens.expiry_date ?? null,
@@ -57,8 +63,12 @@ authRouter.get("/google/callback", async (req, res, next) => {
   }
 });
 
-authRouter.get("/google/connections", (_req, res) => {
-  res.json({
-    connections: listGoogleConnections(),
-  });
+authRouter.get("/google/connections", async (_req, res, next) => {
+  try {
+    res.json({
+      connections: await listGoogleConnections(),
+    });
+  } catch (error) {
+    next(error);
+  }
 });
