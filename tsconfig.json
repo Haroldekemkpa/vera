@@ -20,7 +20,7 @@
 
     // Other Outputs
     "sourceMap": true,
-   "resolveJsonModule": true,
+    "resolveJsonModule": true,
 
     "esModuleInterop": true,
 

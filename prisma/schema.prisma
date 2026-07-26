@@ -1,0 +1,139 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(uuid()) @db.Uuid
+  email     String   @unique
+  name      String?
+  avatarUrl String?  @map("avatar_url")
+  timezone  String   @default("UTC")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  oauthAccounts   OAuthAccount[]
+  conversations   Conversation[]
+  messages        Message[]
+  memories        Memory[]
+  toolExecutions  ToolExecution[]
+  approvalRequests ApprovalRequest[]
+
+  @@map("users")
+}
+
+model OAuthAccount {
+  id                String    @id @default(uuid()) @db.Uuid
+  userId            String    @map("user_id") @db.Uuid
+  provider          String
+  providerAccountId String?   @map("provider_account_id")
+  accessToken       String?   @map("access_token_encrypted")
+  refreshToken      String?   @map("refresh_token_encrypted")
+  tokenType         String?   @map("token_type")
+  scopes            String[]
+  expiresAt         DateTime? @map("expires_at") @db.Timestamptz(6)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@unique([userId, provider])
+  @@map("oauth_accounts")
+}
+
+model OAuthState {
+  state     String   @id
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+
+  @@map("oauth_states")
+}
+
+model Conversation {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  title     String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages       Message[]
+  toolExecutions ToolExecution[]
+
+  @@map("conversations")
+}
+
+model Message {
+  id             String   @id @default(uuid()) @db.Uuid
+  conversationId String   @map("conversation_id") @db.Uuid
+  userId         String?  @map("user_id") @db.Uuid
+  role           String
+  content        String
+  metadata       Json     @default("{}")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  memories     Memory[]
+
+  @@map("messages")
+}
+
+model Memory {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  kind            String
+  content         String
+  importance      Int      @default(1)
+  sourceMessageId String?  @map("source_message_id") @db.Uuid
+  metadata        Json     @default("{}")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceMessage Message? @relation(fields: [sourceMessageId], references: [id], onDelete: SetNull)
+
+  @@map("memories")
+}
+
+model ToolExecution {
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String?   @map("user_id") @db.Uuid
+  conversationId String?   @map("conversation_id") @db.Uuid
+  toolName       String    @map("tool_name")
+  provider       String?
+  input          Json      @default("{}")
+  output         Json      @default("{}")
+  status         String
+  error          String?
+  startedAt      DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
+  finishedAt     DateTime? @map("finished_at") @db.Timestamptz(6)
+
+  user             User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  conversation     Conversation?     @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  approvalRequests ApprovalRequest[]
+
+  @@map("tool_executions")
+}
+
+model ApprovalRequest {
+  id              String    @id @default(uuid()) @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  toolExecutionId String?   @map("tool_execution_id") @db.Uuid
+  actionType      String    @map("action_type")
+  summary         String
+  payload         Json      @default("{}")
+  status          String    @default("pending")
+  requestedAt     DateTime  @default(now()) @map("requested_at") @db.Timestamptz(6)
+  respondedAt     DateTime? @map("responded_at") @db.Timestamptz(6)
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  toolExecution ToolExecution? @relation(fields: [toolExecutionId], references: [id], onDelete: SetNull)
+
+  @@map("approval_requests")
+}
