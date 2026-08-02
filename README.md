@@ -225,6 +225,11 @@ Notion
 vera/
 │
 ├── src/
+│   ├── channels/
+│   │   ├── whatsapp/
+│   │   ├── telegram/
+│   │   └── web/
+│   │
 │   ├── agents/
 │   │   ├── supervisor/
 │   │   ├── planner/
@@ -232,10 +237,10 @@ vera/
 │   │   ├── reflection/
 │   │   └── evaluator/
 │   │
-│   ├── tools/
+│   ├── integrations/
 │   │   ├── gmail/
+│   │   ├── drive/
 │   │   ├── calendar/
-│   │   ├── telegram/
 │   │   ├── notion/
 │   │   ├── sheets/
 │   │   ├── slack/
